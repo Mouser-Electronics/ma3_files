@@ -40,6 +40,24 @@ void print_to_console(const char* msg);
 void print_ipv4_addr(ULONG address, char *str, size_t len);
 static uint8_t sq_number = 0;
 
+/* BEGIN ADDED */
+
+static int console_connected = 1;   // 1=connected, 0=not connected
+
+void g_sf_console_err_callback(void *p_instance, void *p_data);
+void g_sf_console_err_callback(void *p_instance, void *p_data)
+{
+    /** Suppress compiler warning for not using parameters. */
+    SSP_PARAMETER_NOT_USED (p_instance);
+    SSP_PARAMETER_NOT_USED (p_data);
+
+    /* Console is not connected */
+
+    console_connected = 0;
+}
+
+/* END ADDED */
+
 static void print_static_addr(net_input_cfg_t net_cfg)
 {
     CHAR str[64];
@@ -76,6 +94,14 @@ void print_to_console(const char* msg)
     UINT status;
     char str[128];
     unsigned int i = 0, j = 0;
+
+    /* BEGIN ADDED */
+
+    if (!console_connected ) {
+        return;
+    }
+
+    /* END ADDED */
 
     status = tx_mutex_get(&g_console_mutex, TX_WAIT_FOREVER);
     if (status != TX_SUCCESS)
@@ -1591,11 +1617,24 @@ static void BG96_init(void)
 /* Console Thread entry function */
 void console_thread_entry(void)
 {
-    uint8_t ch[1];
+    /* BEGIN MODIFIED */
+
+    // uint8_t ch[1];
+
+    /* END MODIFIED */
+
     char str[96];
     ssp_pack_version_t ssp_version;
 
-    g_sf_console.p_api->read (g_sf_console.p_ctrl, ch, 1, TX_WAIT_FOREVER);
+    /* BEGIN MODIFIED */
+
+    // g_sf_console.p_api->read (g_sf_console.p_ctrl, ch, 1, TX_WAIT_FOREVER);
+
+    if (console_connected) {
+        tx_thread_sleep (10);   // delay to allow enumeration to complete
+    }
+
+    /* END MODIFIED */
 
     R_SSP_VersionGet(&ssp_version);
 
@@ -1619,9 +1658,42 @@ void console_thread_entry(void)
 
     init_sensors();
 
+    /* BEGIN ADDED */
+
+    // If the console is not connected, automatically initiate the equivalent
+    // of the "demo start" command. Otherwise when the console is connected, use
+    // "demo start" on the console to start sensor processing.
+
+    if (!console_connected) {
+
+        sf_console_callback_args_t args = {
+          .p_ctrl = NULL,
+          .context = NULL,
+          .p_remaining_string = (uint8_t const *)"start",
+          .bytes = 6
+        };
+
+        demo_service_callback(&args);
+    }
+
+    /* END ADDED */
+
     while (true)
     {
+        /* BEGIN ADDED */
+
+        if (console_connected) {
+
+        /* END ADDED */
+
         g_sf_console.p_api->prompt(g_sf_console.p_ctrl, NULL, TX_WAIT_FOREVER);
+
+        /* BEGIN ADDED */
+
+        }
+
+        /* END ADDED */
+
         tx_thread_sleep (1);
     }
 }

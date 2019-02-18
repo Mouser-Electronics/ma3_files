@@ -317,6 +317,113 @@ ssp_err_t init_sensors(void)
 
 void read_gps_coordinates(sensors_data_t *sens)
 {
+    /* BEGIN ADDED */
+
+    char sentence[120];
+    char str[80];
+    char ch;
+    UINT retval;
+    int index;
+
+    // Initialize values to empty string
+
+    sens->latitude[0] = '\0';
+    sens->longitude[0] = '\0';
+
+    // Remove all but the last 120 chars (or less) of the incoming buffer.
+
+    if (g_gps_queue.tx_queue_enqueued > 120) {
+        UINT remaining = g_gps_queue.tx_queue_enqueued - 120;
+        while (remaining--) {
+            retval = tx_queue_receive(&g_gps_queue, &ch, TX_NO_WAIT);
+        }
+    } else {
+        do {
+            tx_thread_sleep(50);
+        } while (g_gps_queue.tx_queue_enqueued < 120);
+    }
+
+    // Find beginning of next GPS sentence
+
+    do {
+        retval = tx_queue_receive(&g_gps_queue, &ch, TX_NO_WAIT);
+    } while (ch != '$');
+
+    // Save the sentence
+
+    index = 0;
+    sentence[index++] = ch;
+
+    do {
+        retval = tx_queue_receive(&g_gps_queue, &ch, TX_NO_WAIT);
+        if (retval == TX_SUCCESS) {
+            sentence[index++] = ch;
+        } else {
+            tx_thread_sleep(50);
+            ch = 0;
+        }
+    } while (ch != '*');
+
+    sentence[index] = '\0';  // terminate the string
+
+    // Check if this is a GPGGA sentence
+
+    if (strncmp(sentence, "$GPGGA", 6) != 0) {
+        return;
+    }
+
+    // Parse the sentence into fields
+
+    char *tokens[18];
+    unsigned token_count = 0;
+
+    char *running = sentence;
+
+    tokens[token_count] = strsep(&running, ",");
+    while (tokens[token_count] != NULL && token_count < sizeof(tokens)/sizeof(tokens[0])) {
+        tokens[++token_count] = strsep(&running, ",");
+    }
+
+    if (token_count >= 6 && tokens[6][0] < '1') {
+        /* No GPS fix */
+        return;
+    }
+
+    if (strlen(tokens[2]) >= 6 && strlen(tokens[4]) >= 7) {
+        char deg[4];
+        double x;
+        int digits = 10;
+        extern char *gcvt(double,int,char *);
+        // Extract latitude value
+        strncpy(deg, tokens[2], 2);
+        deg[2] = '\0';
+        x = atof(deg) + (atof(tokens[2]+2) / 60.0);
+        gcvt(x, digits, str);
+        if (tokens[3][0] == 'S') {
+            strcat(sens->latitude, "-");
+        }
+        strcat(sens->latitude, str);
+        strncpy(deg, tokens[4], 3);
+        deg[3] = '\0';
+        x = atof(deg) + (atof(tokens[4]+3) / 60.0);
+        if (tokens[4][0] == '1') {
+            digits++;
+        }
+        gcvt(x, digits, str);
+        if (tokens[5][0] == 'W') {
+            strcat(sens->longitude, "-");
+        }
+        strcat(sens->longitude, str);
+    }
+
+    return;
+
+    /* END ADDED */
+
+#if 0
+
+    /* ORIGINAL CODE */
+
     uint8_t i = 0;
     char *star_ptr = NULL;
     char *post_ptr = NULL;
@@ -437,6 +544,8 @@ void read_gps_coordinates(sensors_data_t *sens)
             }
         }
     }
+
+#endif
 }
 
 void read_sensor(sensors_data_t *sens)
