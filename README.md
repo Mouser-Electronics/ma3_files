@@ -7,3 +7,5 @@ Modified versions of selected files from Renesas Synergy MQTT/TLS Google Cloud C
 * Synergy_GCloudSIn_AECloud2/src/console_thread_entry.c
 * Synergy_GCloudSIn_AECloud2/src/sensors.c
 
+## https://www.mouser.com/applications/using-renesas-ae-cloud2-gps-data-google-iot/
+
